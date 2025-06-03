@@ -21,12 +21,10 @@ import time
 import pickle
 import numpy as np
 
+#https://uttamjangir1415--ai-podcast-clipper-aipodcastclipper-pro-6d2b51.modal.run 
+
 class ProcessVideoRequest(BaseModel):
     s3_key: str
-
-
-
-gcs_client = storage.Client.from_service_account_info(info)
 
 image = (modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
          .apt_install(["ffmpeg","libgl1-mesa-glx","wget","libcudnn8","libcudnn8-dev"])
@@ -41,6 +39,13 @@ volume = modal.Volume.from_name("ai-podcast-clipper-model-cache",  create_if_mis
 mount_path = "/root/.cache/torch"
 
 auth_scheme = HTTPBearer()
+
+
+def clean_backslashes(input_string):
+    # Split the string into lines, remove trailing backslashes, and join them with a new line 
+    lines = input_string.splitlines()
+    cleaned_lines = [line.rstrip('\\') for line in lines]
+    return '\n'.join(cleaned_lines)
 
 def create_vertical_video(tracks,scores,pyframes_path,pyavi_path,audio_path,output_path,framerate=25): 
     target_width = 1080
@@ -107,7 +112,6 @@ def create_vertical_video(tracks,scores,pyframes_path,pyavi_path,audio_path,outp
             blurred_background = blurred_background[crop_y: crop_y + target_height, crop_x: crop_x + target_width]
             
             center_y = (target_height - resized_height) // 2
-            # blurred_background[center_y:center_y+resized_height, :] = resized_image
             start_y = int(center_y)
             end_y = int(start_y + resized_height)
 
@@ -278,7 +282,28 @@ def process_clip(base_dir:Path, org_video_path:Path, s3_key:str, start_time: flo
 
     create_subtitles_with_ffmpeg(transcrpt_segments, start_time, end_time, vertical_mp4_path, subtitle_output_path, max_words=5)
 
-    gcs_bucket = gcs_client.bucket("ai-podcast-clipper")
+    print("TEST2_______________________________")
+    private_key = os.environ["GCS_PRIVATE_KEY"]
+    formatted_private_key = private_key.replace('\\n','\n')
+    final_private_key = clean_backslashes(formatted_private_key)
+    print(final_private_key)
+    print("TEST2_______________________________")
+    info = {
+    "type": os.environ["GCS_ACCOUNT_TYPE"],
+    "project_id": os.environ["GCS_PROJECT_ID"],
+    "private_key_id": os.environ["GCS_PRIVATE_KEY_ID"],
+    "private_key": final_private_key,
+    "client_email": os.environ["GCS_CLIENT_EMAIL"],
+    "client_id": os.environ["GCS_CLIENT_ID"],
+    "auth_uri": os.environ["GCS_AUTH_URI"],
+    "token_uri": os.environ["GCS_TOKEN_URI"],
+    "auth_provider_x509_cert_url": os.environ["GCS_AUTH_PROVIDER_CERT_URL"],
+    "client_x509_cert_url": os.environ["GCS_CLIENT_CERT_URL"],
+    "universe_domain": os.environ["GCS_UNIVERSE_DOMAIN"]
+    }
+
+    gcs_client = storage.Client.from_service_account_info(info)
+    gcs_bucket = gcs_client.bucket(os.environ["GCS_BUCKET_NAME"])
     blob = gcs_bucket.blob(output_s3_key)
     blob.upload_from_filename(subtitle_output_path)
      
@@ -373,8 +398,29 @@ This is a podcast video transcript consisting of word, along with each words's s
 
         #Download file
         video_path = base_dir / "input.mp4"
-        bucket_name = os.environ["GCP_BUCKET_NAME"] 
+        bucket_name = os.environ["GCS_BUCKET_NAME"]  
 
+        print("TEST1_______________________________")
+        private_key = os.environ["GCS_PRIVATE_KEY"]
+        formatted_private_key = private_key.replace('\\n','\n')
+        final_private_key = clean_backslashes(formatted_private_key)
+        print(final_private_key)
+        print("TEST1_______________________________")
+        info = {
+        "type": os.environ["GCS_ACCOUNT_TYPE"],
+        "project_id": os.environ["GCS_PROJECT_ID"],
+        "private_key_id": os.environ["GCS_PRIVATE_KEY_ID"],
+        "private_key": final_private_key,
+        "client_email": os.environ["GCS_CLIENT_EMAIL"],
+        "client_id": os.environ["GCS_CLIENT_ID"],
+        "auth_uri": os.environ["GCS_AUTH_URI"],
+        "token_uri": os.environ["GCS_TOKEN_URI"],
+        "auth_provider_x509_cert_url": os.environ["GCS_AUTH_PROVIDER_CERT_URL"],
+        "client_x509_cert_url": os.environ["GCS_CLIENT_CERT_URL"],
+        "universe_domain": os.environ["GCS_UNIVERSE_DOMAIN"]
+        }
+
+        gcs_client = storage.Client.from_service_account_info(info)
         
         bucket = gcs_client.bucket(bucket_name)
         blob = bucket.blob(s3_key)
@@ -394,9 +440,6 @@ This is a podcast video transcript consisting of word, along with each words's s
             cleaned_json_string = cleaned_json_string[len("```json"):].strip()
         if cleaned_json_string.endswith("```"):
             cleaned_json_string = cleaned_json_string[:-len("```")].strip()
-
-        # print("Cleaned JSON string ---------------------")
-        # print(cleaned_json_string)
 
         clip_moments = json.loads(cleaned_json_string)
         if not clip_moments:
@@ -428,7 +471,7 @@ def main():
     url = ai_podcast_clipper.process_video.web_url
 
     payload = {
-        "s3_key": "test1/mi65min.mp4"
+        "s3_key": "test2/mi630min.mp4"
     }
     headers = {
         "Content-Type": "application/json",
